@@ -1,4 +1,478 @@
-/* Get references to DOM elements */
+/* Initialize the application */
+document.addEventListener('DOMContentLoaded', () => {
+  loadSelectedProducts();
+  updateGenerateButtonState();
+  
+  // Initialize language toggle
+  initializeLanguageToggle();
+  
+  // Clear placeholder in chat window if user starts typing
+  userInput.addEventListener('focus', () => {
+    if (chatWindow.innerHTML.includes('placeholder-message')) {
+      chatWindow.innerHTML = '';
+    }
+  });
+});
+
+/* ===============================
+   RTL LANGUAGE SUPPORT SYSTEM
+   =============================== */
+
+let isRTL = false;
+
+/* Initialize language toggle functionality */
+function initializeLanguageToggle() {
+  const languageToggle = document.getElementById('languageToggle');
+  const langText = document.getElementById('langText');
+  
+  languageToggle.addEventListener('click', () => {
+    isRTL = !isRTL;
+    toggleLanguage();
+  });
+}
+
+/* Toggle between English and Arabic (RTL) */
+function toggleLanguage() {
+  const html = document.documentElement;
+  const langText = document.getElementById('langText');
+  
+  if (isRTL) {
+    // Switch to Arabic (RTL)
+    html.setAttribute('dir', 'rtl');
+    html.setAttribute('lang', 'ar');
+    langText.textContent = 'English';
+    updateAllTextToArabic();
+    updateChatPlaceholder();
+  } else {
+    // Switch to English (LTR)
+    html.setAttribute('dir', 'ltr');
+    html.setAttribute('lang', 'en');
+    langText.textContent = 'عربي';
+    updateAllTextToEnglish();
+    updateChatPlaceholder();
+  }
+  
+  // Save language preference
+  localStorage.setItem('language', isRTL ? 'ar' : 'en');
+  
+  // Update chat with language change message
+  const message = isRTL ? 
+    "تم تغيير اللغة إلى العربية. يمكنني مساعدتك في العناية بالجمال والبشرة!" :
+    "Language changed to English. I can help you with beauty and skincare advice!";
+  
+  setTimeout(() => {
+    addChatMessage(message, 'bot');
+  }, 300);
+}
+
+/* Update all text elements to Arabic */
+function updateAllTextToArabic() {
+  document.querySelectorAll('[data-ar]').forEach(element => {
+    if (element.tagName === 'INPUT') {
+      element.placeholder = element.dataset.ar;
+    } else if (element.tagName === 'OPTION') {
+      element.textContent = element.dataset.ar;
+    } else {
+      element.textContent = element.dataset.ar;
+    }
+  });
+}
+
+/* Update all text elements to English */
+function updateAllTextToEnglish() {
+  document.querySelectorAll('[data-en]').forEach(element => {
+    if (element.tagName === 'INPUT') {
+      element.placeholder = element.dataset.en;
+    } else if (element.tagName === 'OPTION') {
+      element.textContent = element.dataset.en;
+    } else {
+      element.textContent = element.dataset.en;
+    }
+  });
+}
+
+/* Update chat input placeholder based on language */
+function updateChatPlaceholder() {
+  const userInput = document.getElementById('userInput');
+  if (isRTL) {
+    userInput.placeholder = userInput.dataset.placeholderAr;
+  } else {
+    userInput.placeholder = userInput.dataset.placeholderEn;
+  }
+}
+
+/* Update selected products display with RTL support */
+function updateSelectedProductsDisplay() {
+  if (selectedProducts.length === 0) {
+    const noProductsText = isRTL ? 'لم يتم اختيار منتجات بعد' : 'No products selected yet';
+    selectedProductsList.innerHTML = `<p style="color: #999; font-style: italic;">${noProductsText}</p>`;
+    return;
+  }
+
+  const clearAllText = isRTL ? 'مسح الكل' : 'Clear All';
+  const clearAllBtn = selectedProducts.length > 1 ? 
+    `<button class="clear-all-btn" onclick="clearAllProducts()">${clearAllText}</button>` : '';
+
+  selectedProductsList.innerHTML = clearAllBtn + selectedProducts
+    .map(product => `
+      <div class="selected-item">
+        <span>${product.name} - ${product.brand}</span>
+        <button class="remove-item" onclick="removeProduct(${product.id})">&times;</button>
+      </div>
+    `)
+    .join("");
+}
+
+/* Enhanced response generation with RTL support */
+function generateResponse(userMessage) {
+  const message = userMessage.toLowerCase();
+  
+  // Arabic language responses
+  if (isRTL) {
+    return generateArabicResponse(message);
+  }
+  
+  // Check if asking about current routine
+  if (currentRoutine && (message.includes('routine') || message.includes('step') || message.includes('order'))) {
+    return generateRoutineFollowUp(message);
+  }
+  
+  // Check for selected products questions
+  if (message.includes('selected') || message.includes('products i chose')) {
+    if (selectedProducts.length === 0) {
+      return "You haven't selected any products yet! Browse through the categories above and click on products you'd like to include in your routine.";
+    }
+    return `You've selected ${selectedProducts.length} products: ${selectedProducts.map(p => `${p.name} by ${p.brand}`).join(', ')}. Click "Generate Routine" to get personalized recommendations!`;
+  }
+  
+  // Find matching response
+  for (const [key, response] of Object.entries(chatResponses)) {
+    if (message.includes(key)) {
+      return response;
+    }
+  }
+  
+  // Context-aware responses based on selected products
+  if (selectedProducts.length > 0) {
+    const categories = [...new Set(selectedProducts.map(p => p.category))];
+    
+    if (message.includes('how') && message.includes('use')) {
+      return `Based on your selected ${categories.join(' and ')} products, I'd recommend generating your complete routine first. Click the "Generate Routine" button and I'll give you step-by-step instructions!`;
+    }
+    
+    if (message.includes('when')) {
+      return `Great question! The timing depends on your products. Generally, cleansers and treatments work well morning and night, while sunscreen is for daytime only. Generate your routine for specific timing!`;
+    }
+  }
+  
+  // Smart fallback responses
+  const helpfulResponses = [
+    "I'd love to help! Try asking about specific products, skin concerns, or routine steps. You can also select products above and generate a personalized routine.",
+    "I'm here to help with your beauty routine! Ask me about skincare ingredients, product recommendations, or how to use your selected products.",
+    "Let me assist you! I can answer questions about the L'Oréal brands, skincare routines, makeup application, or hair care. What would you like to know?",
+    "I'm your personal beauty advisor! Feel free to ask about product ingredients, skin types, routine order, or any beauty concerns you have."
+  ];
+  
+  return helpfulResponses[Math.floor(Math.random() * helpfulResponses.length)];
+}
+
+/* Arabic responses for RTL mode */
+function generateArabicResponse(message) {
+  const arabicResponses = {
+    "hello": "مرحباً! أنا هنا لمساعدتك في روتين الجمال. ماذا تريدين أن تعرفي؟",
+    "hi": "أهلاً! هل أنت مستعدة لإنشاء روتين الجمال المثالي؟ اسأليني أي شيء!",
+    "صباح": "روتين الصباح المثالي: منظف ← سيروم فيتامين سي ← مرطب ← واقي الشمس. ابقيه بسيطاً ولكن منتظماً!",
+    "مساء": "روتين المساء: منظف ← علاج (ريتينول/أحماض) ← مرطب ← كريم العينين عند الحاجة. هذا وقت إصلاح البشرة.",
+    "بشرة حساسة": "البشرة الحساسة تحتاج منتجات لطيفة خالية من العطور. ابحثي عن منتجات تحتوي على النياسيناميد والسيراميد.",
+    "حب الشباب": "للبشرة المعرضة لحب الشباب، استخدمي حمض الساليسيليك أو البنزويل بيروكسايد. منتجات لاروش بوزيه ممتازة لعلاج البثور.",
+    "مرطب": "المرطبات تحافظ على رطوبة البشرة وتحمي الحاجز الطبيعي. ابحثي عن مكونات مثل السيراميد وحمض الهيالورونيك.",
+    "شكرا": "على الرحب والسعة! أنا هنا كلما احتجت نصائح الجمال. بشرتك ستشكرك لاعتنائك الجيد بها!"
+  };
+
+  // Check for Arabic keywords
+  for (const [key, response] of Object.entries(arabicResponses)) {
+    if (message.includes(key)) {
+      return response;
+    }
+  }
+
+  // Default Arabic responses
+  const defaultArabicResponses = [
+    "أحب أن أساعدك! جربي السؤال عن منتجات محددة، مشاكل البشرة، أو خطوات الروتين.",
+    "أنا هنا لمساعدتك في روتين الجمال! اسأليني عن مكونات العناية بالبشرة أو توصيات المنتجات.",
+    "دعيني أساعدك! يمكنني الإجابة عن أسئلة حول علامات لوريال التجارية، روتين العناية بالبشرة، أو تطبيق المكياج.",
+    "أنا مستشارة الجمال الشخصية! لا تترددي في السؤال عن مكونات المنتجات، أنواع البشرة، أو أي اهتمامات جمالية لديك."
+  ];
+
+  return defaultArabicResponses[Math.floor(Math.random() * defaultArabicResponses.length)];
+}
+
+/* Enhanced routine generation with RTL support */
+function generateRoutine(products) {
+  const categories = [...new Set(products.map(p => p.category))];
+  const brands = [...new Set(products.map(p => p.brand))];
+  
+  let routine = {
+    title: isRTL ? "روتين الجمال الشخصي الخاص بك" : "Your Personalized Beauty Routine",
+    intro: isRTL ? 
+      `لقد أنشأت روتيناً شخصياً باستخدام ${products.length} منتجات مختارة بعناية${brands.length > 1 ? ` من ${brands.join('، ')}` : ` من ${brands[0]}`}.` :
+      `I've created a personalized routine using ${products.length} carefully selected ${brands.length > 1 ? `products from ${brands.join(', ')}` : `${brands[0]} products`}.`,
+    sections: []
+  };
+
+  // Generate sections based on language
+  if (isRTL) {
+    routine.sections = generateArabicRoutineSections(products);
+    routine.tips = generateArabicTips(categories, brands);
+  } else {
+    // Use existing English routine generation
+    const morningProducts = products.filter(p => 
+      p.category === 'cleanser' || 
+      p.category === 'moisturizer' || 
+      p.category === 'skincare' && (p.name.includes('Vitamin C') || p.name.includes('SPF')) ||
+      p.name.includes('SPF')
+    );
+
+    if (morningProducts.length > 0) {
+      routine.sections.push({
+        title: "Morning Routine",
+        steps: generateMorningSteps(morningProducts)
+      });
+    }
+
+    // Evening routine
+    const eveningProducts = products.filter(p => 
+      p.category === 'cleanser' || 
+      p.category === 'moisturizer' || 
+      p.category === 'skincare' && (p.name.includes('Retinol') || p.name.includes('PM'))
+    );
+
+    if (eveningProducts.length > 0) {
+      routine.sections.push({
+        title: "Evening Routine",
+        steps: generateEveningSteps(eveningProducts)
+      });
+    }
+
+    // Haircare routine
+    const haircareProducts = products.filter(p => p.category === 'haircare' || p.category === 'hair styling' || p.category === 'hair color');
+    if (haircareProducts.length > 0) {
+      routine.sections.push({
+        title: "Hair Care Routine",
+        steps: generateHaircareSteps(haircareProducts)
+      });
+    }
+
+    // Makeup routine
+    const makeupProducts = products.filter(p => p.category === 'makeup');
+    if (makeupProducts.length > 0) {
+      routine.sections.push({
+        title: "Makeup Application",
+        steps: generateMakeupSteps(makeupProducts)
+      });
+    }
+
+    // Special care
+    const specialProducts = products.filter(p => 
+      p.category === 'suncare' || 
+      p.category === 'men\'s grooming' || 
+      p.category === 'fragrance'
+    );
+
+    if (specialProducts.length > 0) {
+      routine.sections.push({
+        title: "Special Care & Finishing Touches",
+        steps: generateSpecialSteps(specialProducts)
+      });
+    }
+
+    routine.tips = generateTips(categories, brands);
+  }
+
+  return routine;
+}
+
+/* Generate Arabic routine sections */
+function generateArabicRoutineSections(products) {
+  let sections = [];
+  
+  // Morning routine in Arabic
+  const morningProducts = products.filter(p => 
+    p.category === 'cleanser' || 
+    p.category === 'moisturizer' || 
+    p.category === 'skincare' && (p.name.includes('Vitamin C') || p.name.includes('SPF')) ||
+    p.name.includes('SPF')
+  );
+
+  if (morningProducts.length > 0) {
+    sections.push({
+      title: "روتين الصباح",
+      steps: generateArabicMorningSteps(morningProducts)
+    });
+  }
+
+  // Evening routine in Arabic
+  const eveningProducts = products.filter(p => 
+    p.category === 'cleanser' || 
+    p.category === 'moisturizer' || 
+    p.category === 'skincare' && (p.name.includes('Retinol') || p.name.includes('PM'))
+  );
+
+  if (eveningProducts.length > 0) {
+    sections.push({
+      title: "روتين المساء",
+      steps: generateArabicEveningSteps(eveningProducts)
+    });
+  }
+
+  // Haircare in Arabic
+  const haircareProducts = products.filter(p => p.category === 'haircare' || p.category === 'hair styling' || p.category === 'hair color');
+  if (haircareProducts.length > 0) {
+    sections.push({
+      title: "روتين العناية بالشعر",
+      steps: generateArabicHaircareSteps(haircareProducts)
+    });
+  }
+
+  // Makeup in Arabic
+  const makeupProducts = products.filter(p => p.category === 'makeup');
+  if (makeupProducts.length > 0) {
+    sections.push({
+      title: "تطبيق المكياج",
+      steps: generateArabicMakeupSteps(makeupProducts)
+    });
+  }
+
+  return sections;
+}
+
+/* Arabic morning steps */
+function generateArabicMorningSteps(products) {
+  let steps = [];
+  
+  const cleanser = products.find(p => p.category === 'cleanser');
+  if (cleanser) {
+    steps.push(`ابدئي بـ ${cleanser.name} لتنظيف البشرة بلطف وإزالة تراكمات الليل.`);
+  }
+
+  const vitaminC = products.find(p => p.name.includes('Vitamin C'));
+  if (vitaminC) {
+    steps.push(`طبقي ${vitaminC.name} لإشراق البشرة وحمايتها بمضادات الأكسدة.`);
+  }
+
+  const moisturizer = products.find(p => p.category === 'moisturizer' && !p.name.includes('PM'));
+  if (moisturizer) {
+    steps.push(`تابعي مع ${moisturizer.name} لترطيب البشرة وتحضيرها لليوم.`);
+  }
+
+  const spf = products.find(p => p.name.includes('SPF'));
+  if (spf) {
+    steps.push(`اختتمي مع ${spf.name} للحماية الأساسية من الأشعة فوق البنفسجية. لا تتخطي واقي الشمس أبداً!`);
+  }
+
+  if (steps.length === 0) {
+    steps.push("طبقي منتجاتك المختارة بالترتيب: منظف، علاجات، مرطب، وواقي الشمس.");
+  }
+
+  return steps;
+}
+
+/* Arabic evening steps */
+function generateArabicEveningSteps(products) {
+  let steps = [];
+  
+  const cleanser = products.find(p => p.category === 'cleanser');
+  if (cleanser) {
+    steps.push(`ابدئي روتين المساء مع ${cleanser.name} لإزالة المكياج والأوساخ والتلوث من اليوم.`);
+  }
+
+  const retinol = products.find(p => p.name.includes('Retinol'));
+  if (retinol) {
+    steps.push(`طبقي ${retinol.name} لتعزيز تجديد الخلايا وتقليل علامات الشيخوخة. ابدئي ببطء إذا كنت جديدة على الريتينول.`);
+  }
+
+  const nightMoisturizer = products.find(p => p.category === 'moisturizer' && p.name.includes('PM')) || 
+                          products.find(p => p.category === 'moisturizer');
+  if (nightMoisturizer) {
+    steps.push(`اختتمي علاجاتك مع ${nightMoisturizer.name} للترطيب والإصلاح طوال الليل.`);
+  }
+
+  if (steps.length === 0) {
+    steps.push("اتبعي روتين مساء بسيط: نظفي جيداً، طبقي العلاجات، ورطبي.");
+  }
+
+  return steps;
+}
+
+/* Arabic haircare steps */
+function generateArabicHaircareSteps(products) {
+  let steps = [];
+  
+  const shampoo = products.find(p => p.name.includes('Shampoo'));
+  if (shampoo) {
+    steps.push(`اغسلي شعرك بـ ${shampoo.name}، مع التركيز على فروة الرأس والجذور.`);
+  }
+
+  const conditioner = products.find(p => p.name.includes('Conditioner'));
+  if (conditioner) {
+    steps.push(`طبقي ${conditioner.name} من المنتصف إلى الأطراف، اتركيه لمدة 2-3 دقائق، ثم اشطفيه جيداً.`);
+  }
+
+  if (steps.length === 0) {
+    steps.push("اتبعي الروتين الأساسي: شامبو، بلسم، وصففي حسب الحاجة.");
+  }
+
+  return steps;
+}
+
+/* Arabic makeup steps */
+function generateArabicMakeupSteps(products) {
+  let steps = [];
+  
+  const foundation = products.find(p => p.name.includes('Foundation'));
+  if (foundation) {
+    steps.push(`أنشئي قاعدة متساوية مع ${foundation.name}، امزجي للخارج من وسط الوجه.`);
+  }
+
+  const mascara = products.find(p => p.name.includes('Mascara'));
+  if (mascara) {
+    steps.push(`عززي رموشك مع ${mascara.name}، طبقي من الجذر إلى الطرف بحركات متعرجة.`);
+  }
+
+  if (steps.length === 0) {
+    steps.push("طبقي منتجات المكياج بالترتيب التقليدي: قاعدة، عيون، شفاه.");
+  }
+
+  return steps;
+}
+
+/* Arabic tips */
+function generateArabicTips(categories, brands) {
+  let tips = [
+    "💡 اختبري المنتجات الجديدة دائماً على منطقة صغيرة قبل الاستخدام الكامل",
+    "💡 الانتظام هو المفتاح - التزمي بروتينك للحصول على أفضل النتائج",
+    "💡 طبقي المنتجات بأيدي أو أدوات نظيفة"
+  ];
+
+  if (categories.includes('skincare')) {
+    tips.push("💡 للعناية بالبشرة، طبقي من الأرق إلى الأكثف قواماً");
+  }
+
+  if (categories.includes('haircare')) {
+    tips.push("💡 استخدمي الماء الفاتر عند غسل الشعر لمنع التلف");
+  }
+
+  return tips;
+}
+
+/* Load language preference on startup */
+function loadLanguagePreference() {
+  const savedLanguage = localStorage.getItem('language');
+  if (savedLanguage === 'ar') {
+    isRTL = true;
+    toggleLanguage();
+  }
+}/* Get references to DOM elements */
 const categoryFilter = document.getElementById("categoryFilter");
 const productsContainer = document.getElementById("productsContainer");
 const chatForm = document.getElementById("chatForm");
